@@ -3,30 +3,49 @@ dotenv.config();
 
 import { default as express, Express } from 'express';
 import { default as cors } from 'cors';
+import { default as BodyParser } from 'body-parser';
+
+import { default as dns } from 'dns';
 
 let app = express();
 app.use(cors({ optionsSuccessStatus: 200 }));
 
 app.get('/', (req, res) => {
-	res.send('API: /api/:date');
+	res.send('API: GET /api/shorturl/:id, POST /api/shorturl');
 });
 
-app.get('/api/:date?', (req, res) => {
-	const date = req.params.date;
-	let parsed: Date;
-	if (date != null) {
-		parsed = new Date(date);
-		if (isNaN(parsed.getTime())) {
-			parsed = new Date(parseInt(date));
-			if (isNaN(parsed.getTime())) {
-				return res.json({ error: 'Invalid Date' });
-			}
-		}
+// Status codes are commented out because freeCodeCamp fails the test if they're there...
+
+let shortlinks: string[] = [];
+app.get('/api/shorturl/:id', (req, res) => {
+	const id = parseInt(req.params.id);
+	if (id in shortlinks) {
+		return res.redirect(shortlinks[id]);
 	} else {
-		parsed = new Date();
+		return res/*.status(404)*/.json({ error: 'ID not found' });
+	}
+});
+
+app.post('/api/shorturl', BodyParser.urlencoded({ extended: false }), async (req, res) => {
+	const url = req.body.url;
+	let parsed: URL;
+
+	try {
+		parsed = new URL(url);
+	} catch (e) {
+		return res/*.status(400)*/.json({ error: 'invalid url' });
 	}
 	
-	return res.json({ unix: parsed.getTime(), utc: parsed.toUTCString() });
+	dns.lookup(parsed.hostname, (err) => {
+		if (err) {
+			return res/*.status(400)*/.json({ error: 'invalid url' });
+		} else {
+			return res.json({
+				original_url: parsed.toString(),
+				short_url: shortlinks.push(parsed.toString()) - 1 // off by one
+			});
+		}
+	});
 });
 
 app.listen(process.env.PORT || 3000, () => {
